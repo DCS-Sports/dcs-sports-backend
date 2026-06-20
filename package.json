@@ -1,0 +1,42 @@
+{
+  "name": "dcs-sports-backend",
+  "version": "0.1.0",
+  "private": true,
+  "description": "DCS Sports — CW16 lane: API gateway, BullMQ queue, agents, revenue (DARK), alerts, M-S1 E2E harness",
+  "type": "commonjs",
+  "scripts": {
+    "build": "tsc -p tsconfig.json",
+    "start": "node dist/gateway/server.js",
+    "dev": "ts-node src/gateway/server.ts",
+    "test": "jest --runInBand",
+    "worker": "ts-node src/queue/worker.ts",
+    "gates": "ts-node src/harness/gates.ts",
+    "gates:live": "ts-node src/harness/live_gates.ts",
+    "loadtest": "ts-node src/harness/loadtest.ts",
+    "audit": "ts-node src/harness/audit.ts",
+    "moneyflip": "ts-node src/harness/moneyflip.ts"
+  },
+  "dependencies": {
+    "@supabase/supabase-js": "^2.45.0",
+    "bullmq": "^5.12.0",
+    "express": "^4.19.2",
+    "jsonwebtoken": "^9.0.3",
+    "pg": "^8.22.0",
+    "razorpay": "^2.9.4",
+    "zod": "^3.25.76"
+  },
+  "devDependencies": {
+    "@types/express": "^4.17.21",
+    "@types/jest": "^29.5.12",
+    "@types/jsonwebtoken": "^9.0.10",
+    "@types/node": "^20.14.0",
+    "@types/pg": "^8.20.0",
+    "jest": "^29.7.0",
+    "ts-jest": "^29.2.0",
+    "ts-node": "^10.9.2",
+    "typescript": "^5.5.0"
+  },
+  "engines": {
+    "node": ">=20"
+  }
+}

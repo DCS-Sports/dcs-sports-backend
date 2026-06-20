@@ -1,0 +1,84 @@
+<!DOCTYPE html>
+<html lang="en">
+<head>
+<meta charset="UTF-8" />
+<meta name="viewport" content="width=device-width, initial-scale=1.0" />
+<title>DCS Sports — Status</title>
+<style>
+  :root { --accent:#0ea5e9; --accent-soft:#e0f2fe; --accent-deep:#0369a1; --ink:#0f172a; --muted:#64748b; --line:#e2e8f0; --ok:#059669; --warn:#d97706; --down:#dc2626; }
+  *{box-sizing:border-box;margin:0;padding:0}
+  body{font-family:ui-sans-serif,system-ui,-apple-system,"Segoe UI",Roboto,sans-serif;background:#fff;color:var(--ink);line-height:1.5}
+  .wrap{max-width:680px;margin:0 auto;padding:48px 24px 80px}
+  .top{display:flex;align-items:center;gap:12px;margin-bottom:8px}
+  .dot{width:14px;height:14px;border-radius:50%;background:var(--muted);box-shadow:0 0 0 4px var(--line)}
+  .dot.ok{background:var(--ok);box-shadow:0 0 0 4px #ecfdf5}
+  .dot.down{background:var(--down);box-shadow:0 0 0 4px #fef2f2}
+  h1{font-size:22px;font-weight:650;letter-spacing:-.01em}
+  .state-line{font-size:15px;color:var(--muted);margin-bottom:32px}
+  .state-line strong{color:var(--ink)}
+  .card{border:1px solid var(--line);border-radius:14px;padding:20px;margin-bottom:14px;box-shadow:0 1px 2px rgba(15,23,42,.04)}
+  .row{display:flex;align-items:center;justify-content:space-between;padding:8px 0}
+  .row + .row{border-top:1px solid var(--line)}
+  .k{font-size:14px;color:var(--muted)} .v{font-size:14px;font-weight:600}
+  .tag{font-size:11px;font-weight:700;padding:3px 8px;border-radius:6px}
+  .tag.ok{background:#ecfdf5;color:var(--ok)} .tag.warn{background:#fffbeb;color:var(--warn)} .tag.down{background:#fef2f2;color:var(--down)}
+  .gate{display:flex;justify-content:space-between;font-size:13px;padding:7px 0}
+  .gate + .gate{border-top:1px dashed var(--line)}
+  .accent{color:var(--accent-deep)}
+  .meta{font-size:12px;color:var(--muted);margin-top:24px;text-align:center}
+  input{font-family:ui-monospace,monospace;font-size:12px;padding:9px 11px;border:1px solid var(--line);border-radius:9px;width:100%;margin-bottom:14px}
+  input:focus{outline:2px solid var(--accent);border-color:var(--accent)}
+</style>
+</head>
+<body>
+<div class="wrap">
+  <div class="top"><span class="dot" id="dot"></span><h1>DCS Sports Status</h1></div>
+  <div class="state-line" id="state">Checking the backend…</div>
+
+  <input type="url" id="base" value="https://dcs-sports-backend-production.up.railway.app" aria-label="Backend URL" />
+
+  <div class="card">
+    <div class="row"><span class="k">Backend</span><span class="v" id="svc">—</span></div>
+    <div class="row"><span class="k">Uptime</span><span class="v" id="uptime">—</span></div>
+    <div class="row"><span class="k">Supabase</span><span class="tag" id="supa">—</span></div>
+    <div class="row"><span class="k">Queue (Redis)</span><span class="tag" id="redis">—</span></div>
+    <div class="row"><span class="k">Money</span><span class="v accent" id="money">—</span></div>
+  </div>
+
+  <div class="card">
+    <div class="k" style="margin-bottom:8px;font-weight:600;color:var(--ink)">Acceptance gates</div>
+    <div id="gates"></div>
+  </div>
+
+  <div class="meta" id="meta"></div>
+</div>
+<script>
+  const $=(id)=>document.getElementById(id);
+  function tag(el,s){el.className='tag '+(s==='ok'?'ok':s==='down'?'down':'warn');el.textContent=s;}
+  async function load(){
+    const base=$('base').value.replace(/\/+$/,'');
+    try{
+      const r=await fetch(base+'/status');const s=await r.json();
+      $('dot').className='dot '+(s.healthy?'ok':'down');
+      $('state').innerHTML=s.healthy?'All systems <strong>operational</strong>.':'Service <strong>degraded</strong> — a dependency is down.';
+      $('svc').textContent=s.service||'—';
+      $('uptime').textContent=s.uptime_s!=null?Math.floor(s.uptime_s/60)+'m '+(s.uptime_s%60)+'s':'—';
+      tag($('supa'),s.dependencies?.supabase||'—');
+      tag($('redis'),s.dependencies?.redis||'—');
+      $('money').textContent=s.money||'—';
+      $('gates').innerHTML=(s.gates||[]).map(g=>{
+        const st=(g.status||'').toUpperCase();const shown=st==='GREEN'?'REAL':st;
+        const c=shown==='REAL'?'ok':shown==='FAIL'?'down':'warn';
+        return `<div class="gate"><span>${g.gate}</span><span class="tag ${c}">${shown}</span></div>`;
+      }).join('');
+      $('meta').textContent='Checked '+new Date().toLocaleTimeString();
+    }catch(e){
+      $('dot').className='dot down';$('state').innerHTML='Could not reach the backend.';
+      $('meta').textContent=e.message;
+    }
+  }
+  $('base').addEventListener('keydown',e=>{if(e.key==='Enter')load();});
+  load();
+</script>
+</body>
+</html>

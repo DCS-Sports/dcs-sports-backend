@@ -1,0 +1,38 @@
+# DCS Sports — CW16 CI / Railway config
+# CWs prepare CI. DK deploys. This file never triggers a prod push by itself.
+
+build:
+  steps:
+    - npm ci
+    - npm run build      # tsc -> dist/
+    - npm test           # all tests must pass before deploy is allowed
+
+services:
+  gateway:
+    start: node dist/gateway/server.js
+    healthcheck: /health/ready
+    port: 8080
+  worker:
+    start: node dist/queue/worker.js
+    # BullMQ workers: agents, alerts, vision intake
+
+# Railway target service: dcs-sports-backend
+# Frontend lanes deploy separately to Cloudflare Pages.
+
+required_env:
+  - SUPABASE_URL
+  - SUPABASE_SERVICE_ROLE_KEY    # server-side ONLY (bypasses RLS) — never frontend
+  - SUPABASE_ANON_KEY            # client reads go THROUGH RLS
+  - SPORTS_REDIS_URL
+
+# admin ops (selfcheck/privileged probes) — server-only:
+admin_env:
+  - SPORTS_ADMIN_TOKEN          # enables POST /selfcheck/ms1 (fail-closed if unset)
+
+# DARK — payments dual-rail, both off until DK flips:
+dark_env:
+  - PAYMENTS_LIVE=0              # the ONE switch; 1 = live (DK-only)
+  - RAZORPAY_KEY_ID             # reuse DCS Rank live+GST integration
+  - RAZORPAY_KEY_SECRET
+  - STRIPE_SECRET_KEY           # reuse Atlas/Agentic integration
+  - STRIPE_WEBHOOK_SECRET
