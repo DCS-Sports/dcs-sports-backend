@@ -115,6 +115,7 @@ app.get(['/health', '/healthz'], (_req, res) => {
       x: !!process.env.X_BEARER_TOKEN,
       youtube: !!process.env.YOUTUBE_API_KEY,
       discord: !!process.env.DISCORD_BOT_TOKEN_TRD,
+      telegram: !!process.env.TELEGRAM_BOT_TOKEN_TRD,
       hashnode: !!process.env.HASHNODE_TOKEN,
       devto: !!process.env.DEVTO_API_KEY,
     },
