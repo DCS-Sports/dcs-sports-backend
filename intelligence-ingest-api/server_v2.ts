@@ -114,7 +114,7 @@ app.get(['/health', '/healthz'], (_req, res) => {
       linkedin: !!process.env.LINKEDIN_ACCESS_TOKEN,
       x: !!process.env.X_BEARER_TOKEN,
       youtube: !!process.env.YOUTUBE_API_KEY,
-      discord: !!process.env.DISCORD_BOT_TOKEN,
+      discord: !!process.env.DISCORD_BOT_TOKEN_TRD,
       hashnode: !!process.env.HASHNODE_TOKEN,
       devto: !!process.env.DEVTO_API_KEY,
     },
