@@ -1,3 +1,8 @@
 node_modules/
 dist/
 .env
+
+*.apk
+*.aab
+"TRD Dashboard and TRD wallet data/TRD-Wallet/android/app/build/"
+"TRD Dashboard and TRD wallet data/TRD-Wallet/android/.gradle/"
