@@ -86,6 +86,8 @@ function authMiddleware(req: Request, res: Response, next: NextFunction) {
   if (token !== secret) {
     return res.status(401).json({ ok: false, error: 'unauthorized' });
   }
+  // Set req.user so route handlers can trust the request is authenticated
+  (req as any).user = { id: 'dk', role: 'founder' };
   next();
 }
 
