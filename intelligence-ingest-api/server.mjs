@@ -4,6 +4,7 @@
 import http from "node:http";
 import { ingestHandler, ingested } from "./src/CW24_AgenticV2_intelligence-ingest.mjs";
 import { catalog } from "./src/CW24_AgenticV2_marketplace-explorer.mjs";
+import { buildAnalyticsDashboard } from "./intel_analytics_posthog.mjs";
 
 const PORT = process.env.PORT || 8082;
 const MONEY_DARK = process.env.AUTOMATION_LIVE !== "1";  // automation/settlement DARK by default
@@ -37,6 +38,24 @@ const server = http.createServer((req, res) => {
         razorpay:   !!(process.env.RAZORPAY_KEY_ID && process.env.RAZORPAY_KEY_SECRET),
       }
     });
+  // ── Analytics dashboard (PostHog live data) ────────────────────────────────
+  if (req.method === "GET" && url.pathname === "/api/analytics/dashboard") {
+    const range = url.searchParams.get("range") || "7d";
+    buildAnalyticsDashboard(range).then(data => {
+      if (data._error) return send(res, 503, { ok: false, error: data._error, data: null });
+      send(res, 200, { ok: true, data, updatedAt: data.updatedAt, connectors: data.connectors });
+    }).catch(e => send(res, 500, { ok: false, error: e.message }));
+    return;
+  }
+  // ── Analytics sites list ───────────────────────────────────────────────────
+  if (req.method === "GET" && url.pathname === "/api/analytics/sites") {
+    const sites = (process.env.INTEL_SITES || "dcsai.ai,dcslabs.ai,agentic.dcsai.ai,intel.dcsai.ai").split(",");
+    return send(res, 200, { sites: sites.map(s => ({ domain: s.trim() })) });
+  }
+  // ── Analytics settings ─────────────────────────────────────────────────────
+  if (req.method === "GET" && url.pathname === "/api/analytics/settings") {
+    return send(res, 200, { social: [], connectors: { posthog: "connected", ga4: process.env.GA4_PROPERTY_ID ? "pending" : "missing", supabase: process.env.SUPABASE_URL ? "connected" : "missing" } });
+  }
   if (req.method === "GET" && url.pathname === "/api/integrations/marketplace")
     return send(res, 200, { catalog: catalog() });
   if (req.method === "GET" && url.pathname === "/api/intelligence/feed")
