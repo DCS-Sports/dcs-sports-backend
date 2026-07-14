@@ -29,6 +29,47 @@ import { mountCW9 } from '../cw9/mount';
 
 export function createApp() {
   const app = express();
+
+  /* 🔴 CORS — THE MISSING WIRE.   15 Jul 2026
+   *
+   * ALLOWED_ORIGINS was set in Railway and read by NOTHING. This gateway set zero Access-Control
+   * headers and installed no cors package, so the browser app (app.sports.dcsai.ai) was blocked by
+   * the browser on every cross-origin call to identity/athletes/passport — which is the real cause
+   * of "Could not load passport. Try again." The env var was a phantom.
+   *
+   * This finally reads it. No new dependency — an inline middleware is smaller than the `cors`
+   * package and does exactly what is needed and nothing more:
+   *   · origin is echoed ONLY if it is on the allowlist (never a blanket "*", because Authorization
+   *     is a credentialed header and "*" + credentials is both unsafe and rejected by browsers);
+   *   · Authorization is allowed (the passport bearer token) — without this the fix does nothing;
+   *   · OPTIONS preflight is answered 204 before auth/rate-limit, or every POST fails silently.
+   *
+   * ALLOWED_ORIGINS is a comma-separated list, e.g.
+   *   https://app.sports.dcsai.ai,https://sports.dcsai.ai
+   * If it is UNSET the middleware allows nothing cross-origin and logs a warning — it fails CLOSED,
+   * loudly, rather than silently allowing everything. Set it in Railway before the app can talk.
+   */
+  const ALLOWED = (process.env.ALLOWED_ORIGINS ?? '')
+    .split(',').map(o => o.trim()).filter(Boolean);
+  if (ALLOWED.length === 0) {
+    console.warn('[cors] ALLOWED_ORIGINS is empty — every cross-origin browser call will be refused. ' +
+      'Set it in Railway, e.g. "https://app.sports.dcsai.ai,https://sports.dcsai.ai".');
+  }
+  app.use((req, res, next) => {
+    const origin = req.headers.origin;
+    if (origin && ALLOWED.includes(origin)) {
+      res.setHeader('Access-Control-Allow-Origin', origin);
+      res.setHeader('Vary', 'Origin');
+      res.setHeader('Access-Control-Allow-Credentials', 'true');
+      res.setHeader('Access-Control-Allow-Methods', 'GET,POST,PATCH,PUT,DELETE,OPTIONS');
+      res.setHeader('Access-Control-Allow-Headers', 'Authorization, Content-Type, apikey, x-client-info');
+      res.setHeader('Access-Control-Max-Age', '86400');
+    }
+    // Preflight must be answered BEFORE auth/rate-limit, or the real request never fires.
+    if (req.method === 'OPTIONS') return res.sendStatus(origin && ALLOWED.includes(origin) ? 204 : 403);
+    next();
+  });
+
   app.use(express.json());
 
   // Rate limit all but health checks (monitoring must stay reachable).
