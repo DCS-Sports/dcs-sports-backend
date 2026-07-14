@@ -104,6 +104,59 @@ export function createApp() {
     res.status(h.healthy ? 200 : 503).json({ ready: h.healthy, supabase: h.dependencies.supabase.status, redis: h.dependencies.redis.status });
   });
 
+  /* ─────────────────────────────────────────────────────────────────────────────────────────────
+   * POST /contact — the marketing site's contact form.   15 Jul 2026
+   *
+   * Public (no auth), rate-limited, CORS-covered (sports.dcsai.ai is in ALLOWED_ORIGINS). It sends
+   * via Resend using RESEND_API_KEY + RESEND_SENDER_EMAIL from the Railway env.
+   *
+   * 🔴 HONESTY RULE, same as everywhere in this codebase: it NEVER claims a message was sent unless
+   * Resend confirms it. If the key is not configured it returns 503 and SAYS SO — it does not
+   * pretend. A silent success on a contact form is the bug we removed from the site; we do not
+   * relocate it into the backend.
+   */
+  app.post('/contact', async (req: Request, res: Response) => {
+    const b = (req.body ?? {}) as Record<string, unknown>;
+    const name = String(b.name ?? '').trim();
+    const email = String(b.email ?? '').trim();
+    const role = String(b.role ?? '').trim();
+    const message = String(b.message ?? '').trim();
+    const RECIPIENT = process.env.RESEND_CONTACT_TO || 'hello@dcsai.ai';
+    const FROM = process.env.RESEND_SENDER_EMAIL || 'noreply@dcsai.ai';
+
+    if (!name || !email || !message) return res.status(400).json({ ok: false, error: 'Name, email and message are required.' });
+    if (!/^[^@\s]+@[^@\s]+\.[^@\s]+$/.test(email)) return res.status(400).json({ ok: false, error: 'That email address does not look right.' });
+    if (message.length > 5000) return res.status(400).json({ ok: false, error: 'That message is too long.' });
+
+    if (!process.env.RESEND_API_KEY) {
+      return res.status(503).json({ ok: false,
+        error: 'The contact service is not configured, so your message was NOT sent. Please email ' + RECIPIENT + ' directly.' });
+    }
+
+    const esc = (s: string) => s.replace(/[<>&]/g, (c) => ({ '<': '&lt;', '>': '&gt;', '&': '&amp;' }[c] as string));
+    try {
+      const r = await fetch('https://api.resend.com/emails', {
+        method: 'POST',
+        headers: { authorization: `Bearer ${process.env.RESEND_API_KEY}`, 'content-type': 'application/json' },
+        body: JSON.stringify({
+          from: `DCS Sports <${FROM}>`, to: [RECIPIENT], reply_to: email,
+          subject: `DCS Sports — ${role || 'enquiry'} — ${name}`,
+          html: `<p><b>Name:</b> ${esc(name)}</p><p><b>Email:</b> ${esc(email)}</p>`
+              + (role ? `<p><b>Role:</b> ${esc(role)}</p>` : '')
+              + `<p><b>Message:</b></p><p>${esc(message).replace(/\n/g, '<br>')}</p>`,
+        }),
+      });
+      if (!r.ok) {
+        return res.status(502).json({ ok: false,
+          error: 'We could not send your message just now. Please email ' + RECIPIENT + ' directly.' });
+      }
+      return res.status(200).json({ ok: true });
+    } catch (e: any) {
+      return res.status(502).json({ ok: false,
+        error: 'We could not reach the mail service. Please email ' + RECIPIENT + ' directly.', detail: String(e?.message).slice(0, 120) });
+    }
+  });
+
   // Compact status rollup for the status page (no secrets).
   const bootedAt = Date.now();
   app.get('/status', async (_req: Request, res: Response) => {
