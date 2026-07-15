@@ -34,7 +34,8 @@ athleteRouter.get('/athletes/:id', requireAuth, h(async (req: AuthedRequest, res
       // auth user. Idempotent service-role upsert.
       let uEmail: string | null = passport.emailFromJwt(req.jwt);
       if (!uEmail) { try { const { data: au } = await svc().auth.admin.getUserById(req.userId); uEmail = au?.user?.email ?? null; } catch { /* best effort */ } }
-      await svc().from('sports_users').upsert({ id: req.userId, email: uEmail }, { onConflict: 'id', ignoreDuplicates: true });
+      const uName = (uEmail ? uEmail.split('@')[0] : null) || 'Athlete';   // name is NOT NULL on the deployed schema
+      await svc().from('sports_users').upsert({ id: req.userId, email: uEmail, name: uName }, { onConflict: 'id', ignoreDuplicates: true });
       const { data: created } = await svc().from('sports_athletes')
         .insert({ id: req.userId, user_id: req.userId, sport: 'cricket', visibility: 'private' })
         .select('*').single();

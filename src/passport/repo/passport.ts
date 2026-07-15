@@ -221,9 +221,14 @@ export async function createAthlete(input: AthleteUpsert, emailHint?: string | n
         email = au?.user?.email ?? null;
       } catch { /* best effort */ }
     }
+    /* The deployed sports_users has BOTH email AND name as NOT NULL (no default). We only had email,
+       so `name` was the next violation. Derive a sensible name from the email local part — the user
+       edits it later. Confirmed against information_schema: id, email, name are NOT NULL w/o default;
+       role_flags + created_at have defaults; phone + dob are nullable. */
+    const name = (email ? email.split('@')[0] : null) || 'Athlete';
     const { error: uErr } = await serviceClient()
       .from('sports_users')
-      .upsert({ id: input.user_id, email }, { onConflict: 'id', ignoreDuplicates: true });
+      .upsert({ id: input.user_id, email, name }, { onConflict: 'id', ignoreDuplicates: true });
     if (uErr) throw uErr;
   }
 
