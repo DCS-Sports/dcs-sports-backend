@@ -196,9 +196,17 @@ export async function createAthlete(input: AthleteUpsert): Promise<Athlete | nul
    * role (the row does not exist yet, so RLS could not permit the caller to create it), idempotent,
    * and every non-id column is nullable, so { id } is a complete, valid row. */
   if (input.user_id) {
+    /* The DEPLOYED sports_users has email NOT NULL (the hand-run schema differs from the repo
+       migration, where email was nullable). Fetch it from the auth user via the service-role admin
+       API — a real Google / magic-link user always has one — and include it. */
+    let email: string | null = null;
+    try {
+      const { data: au } = await serviceClient().auth.admin.getUserById(input.user_id);
+      email = au?.user?.email ?? null;
+    } catch { /* best effort; if the row already exists the upsert is a no-op */ }
     const { error: uErr } = await serviceClient()
       .from('sports_users')
-      .upsert({ id: input.user_id }, { onConflict: 'id', ignoreDuplicates: true });
+      .upsert({ id: input.user_id, email }, { onConflict: 'id', ignoreDuplicates: true });
     if (uErr) throw uErr;
   }
 
