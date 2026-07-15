@@ -29,6 +29,9 @@ athleteRouter.get('/athletes/:id', requireAuth, h(async (req: AuthedRequest, res
   if (error) return fail(res, 403, error.message);
   if (!data) {
     if (req.params.id === req.userId) {
+      // 🔴 Parent sports_users row must exist first — same FK (sports_athletes_user_id_fkey) that
+      // broke first passport load. Idempotent service-role upsert; every non-id column is nullable.
+      await svc().from('sports_users').upsert({ id: req.userId }, { onConflict: 'id', ignoreDuplicates: true });
       const { data: created } = await svc().from('sports_athletes')
         .insert({ id: req.userId, user_id: req.userId, sport: 'cricket', visibility: 'private' })
         .select('*').single();

@@ -184,6 +184,24 @@ export async function createAthlete(input: AthleteUpsert): Promise<Athlete | nul
     mock.athletes[id] = row;
     return row;
   }
+  /* 🔴 ENSURE THE PARENT sports_users ROW EXISTS FIRST.   15 Jul 2026
+   *
+   * sports_athletes.user_id FKs to sports_users(id). Nothing ever created that row: the code note
+   * two lines below getOrCreateMyPassport says "sports_users via CW9", and CW9 never wired it. So
+   * every first-time athlete insert failed with:
+   *     insert or update on table "sports_athletes" violates foreign key constraint
+   *     "sports_athletes_user_id_fkey"
+   * which is exactly the error a signed-in user saw on first passport load. The athlete id and
+   * user_id are both the Supabase auth uid, so we upsert that id into sports_users first. Service
+   * role (the row does not exist yet, so RLS could not permit the caller to create it), idempotent,
+   * and every non-id column is nullable, so { id } is a complete, valid row. */
+  if (input.user_id) {
+    const { error: uErr } = await serviceClient()
+      .from('sports_users')
+      .upsert({ id: input.user_id }, { onConflict: 'id', ignoreDuplicates: true });
+    if (uErr) throw uErr;
+  }
+
   const { data, error } = await serviceClient()
     .from('sports_athletes')
     .insert({ ...input, sport: input.sport ?? 'cricket', visibility: input.visibility ?? 'private' })
