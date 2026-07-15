@@ -162,8 +162,23 @@ import type {
   AthleteUpsert, AttendanceRow, AssessmentRow, ProgressPoint, ChildReport, CoachNote,
 } from '../lib/types';
 
-/** CREATE athlete (service role). Returns the new row. */
-export async function createAthlete(input: AthleteUpsert): Promise<Athlete | null> {
+/** The email claim carried by every Supabase access token. Decoding it is more reliable than an
+ *  admin API round-trip — the user literally just authenticated with this token. */
+export function emailFromJwt(token: string | null | undefined): string | null {
+  if (!token) return null;
+  try {
+    const payload = token.split('.')[1];
+    if (!payload) return null;
+    const json = Buffer.from(payload.replace(/-/g, '+').replace(/_/g, '/'), 'base64').toString('utf8');
+    const claims = JSON.parse(json);
+    return (claims.email as string) || null;
+  } catch { return null; }
+}
+
+/** CREATE athlete (service role). Returns the new row.
+ *  emailHint: the caller's email (from their JWT) — sports_users.email is NOT NULL on the deployed
+ *  schema, so we must supply it when first creating the parent user row. */
+export async function createAthlete(input: AthleteUpsert, emailHint?: string | null): Promise<Athlete | null> {
   if (!supabaseEnabled) {
     const id = `ath_${Date.now()}`;
     const row: Athlete = {
@@ -199,11 +214,13 @@ export async function createAthlete(input: AthleteUpsert): Promise<Athlete | nul
     /* The DEPLOYED sports_users has email NOT NULL (the hand-run schema differs from the repo
        migration, where email was nullable). Fetch it from the auth user via the service-role admin
        API — a real Google / magic-link user always has one — and include it. */
-    let email: string | null = null;
-    try {
-      const { data: au } = await serviceClient().auth.admin.getUserById(input.user_id);
-      email = au?.user?.email ?? null;
-    } catch { /* best effort; if the row already exists the upsert is a no-op */ }
+    let email: string | null = emailHint ?? null;
+    if (!email) {
+      try {
+        const { data: au } = await serviceClient().auth.admin.getUserById(input.user_id);
+        email = au?.user?.email ?? null;
+      } catch { /* best effort */ }
+    }
     const { error: uErr } = await serviceClient()
       .from('sports_users')
       .upsert({ id: input.user_id, email }, { onConflict: 'id', ignoreDuplicates: true });
@@ -447,7 +464,7 @@ export async function getOrCreateMyPassport(userId: string, accessToken: string 
     const a = data as Athlete;
     return { athlete: a, created: false, onboarding_needed: needsOnboarding(a) };
   }
-  const created = await createAthlete({ user_id: userId, sport: 'cricket', visibility: 'private' });
+  const created = await createAthlete({ user_id: userId, sport: 'cricket', visibility: 'private' }, emailFromJwt(accessToken));
   if (!created) throw new Error('passport_create_failed');
   return { athlete: created, created: true, onboarding_needed: true };
 }
