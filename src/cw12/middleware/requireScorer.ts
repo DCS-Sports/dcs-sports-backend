@@ -14,6 +14,7 @@
 //   league_admin, association_admin, academy_admin  (+ a future 'scorer' role if added)
 
 import type { Request, Response, NextFunction } from 'express';
+import { getUserScopedClient, getServiceClient } from '../../db/supabase';
 
 export const ALLOWED_SCORER_ROLES = [
   'league_admin',
@@ -26,18 +27,41 @@ interface AuthedRequest extends Request {
   auth?: { user_id?: string; role_flags?: string[] };
 }
 
-export function requireScorer(req: AuthedRequest, res: Response, next: NextFunction): void {
+export async function requireScorer(req: AuthedRequest, res: Response, next: NextFunction): Promise<void> {
   const enforced = process.env.SCORER_AUTH_ENFORCED === '1';
-  if (!enforced) { next(); return; } // inert until CW9 middleware + DK flip
+  if (!enforced) { next(); return; } // inert until DK flips SCORER_AUTH_ENFORCED=1
 
-  const roles = req.auth?.role_flags ?? [];
-  const ok = roles.some((r) => ALLOWED_SCORER_ROLES.includes(r));
-  if (!ok) {
-    res.status(403).json({
-      error: 'not authorized to score this match',
-      allowed: ALLOWED_SCORER_ROLES,
-    });
+  /* 🔴 SELF-CONTAINED.   15 Jul 2026
+   * This used to read req.auth?.role_flags — but NOTHING populated req.auth (the "CW9 middleware"
+   * in the comment never landed, and these routes mount requireScorer WITHOUT requireAuth before
+   * it). So the moment SCORER_AUTH_ENFORCED=1, roles was always [] and scoring 403'd EVERYONE,
+   * admin included. It now verifies the Bearer JWT itself and loads role_flags from sports_users. */
+  const header = req.headers.authorization;
+  if (!header || !header.startsWith('Bearer ')) {
+    res.status(401).json({ error: 'missing bearer token — sign in to score' });
     return;
   }
-  next();
+  const jwt = header.slice('Bearer '.length).trim();
+  try {
+    const { data, error } = await getUserScopedClient(jwt).auth.getUser(jwt);
+    if (error || !data?.user) { res.status(401).json({ error: 'invalid or expired token' }); return; }
+    const userId = data.user.id;
+
+    const { data: row } = await getServiceClient()
+      .from('sports_users').select('role_flags').eq('id', userId).maybeSingle();
+    const roles: string[] = (row?.role_flags as string[] | undefined) ?? [];
+    const ok = roles.some((r) => ALLOWED_SCORER_ROLES.includes(r));
+    if (!ok) {
+      res.status(403).json({
+        error: 'not authorized to score this match',
+        allowed: ALLOWED_SCORER_ROLES,
+        your_roles: roles,   // honest: tells the scorer exactly what they have vs need
+      });
+      return;
+    }
+    req.auth = { user_id: userId, role_flags: roles };
+    next();
+  } catch {
+    res.status(401).json({ error: 'auth verification failed' });
+  }
 }
