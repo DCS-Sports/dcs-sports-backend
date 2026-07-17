@@ -69,3 +69,58 @@ academyRouter.get('/academies/:id/analytics', requireAuth, h(async (req: AuthedR
     present_marks: present.count ?? 0,
   });
 }));
+
+// POST /academies — create an academy (owner = caller)
+academyRouter.post('/academies', requireAuth, h(async (req: AuthedRequest, res) => {
+  const { name, owner_name, city, state, country } = req.body ?? {};
+  if (!name) return fail(res, 400, 'name required');
+  const { data, error } = await svc()
+    .from('sports_academies')
+    .insert({ name, owner_user_id: req.userId, owner_name: owner_name ?? null, city: city ?? null, state: state ?? null, country: country ?? null })
+    .select().single();
+  if (error) return fail(res, 400, error.message);
+  return ok(res, data);
+}));
+
+// GET /academies — academies the caller owns
+academyRouter.get('/academies', requireAuth, h(async (req: AuthedRequest, res) => {
+  const { data, error } = await svc()
+    .from('sports_academies').select('*').eq('owner_user_id', req.userId)
+    .order('created_at', { ascending: false });
+  if (error) return fail(res, 400, error.message);
+  return ok(res, { academies: data ?? [] });
+}));
+
+// GET /academies/:id/players — roster
+academyRouter.get('/academies/:id/players', requireAuth, h(async (req: AuthedRequest, res) => {
+  const { data, error } = await svc()
+    .from('sports_academy_players').select('*').eq('academy_id', req.params.id);
+  if (error) return fail(res, 400, error.message);
+  return ok(res, { players: data ?? [] });
+}));
+
+// PATCH /academies/:id — edit (owner only)
+academyRouter.patch('/academies/:id', requireAuth, h(async (req: AuthedRequest, res) => {
+  const patch: Record<string, any> = {};
+  ['name', 'owner_name', 'city', 'state', 'country'].forEach((k) => { if (req.body?.[k] !== undefined) patch[k] = req.body[k]; });
+  const { data, error } = await svc()
+    .from('sports_academies').update(patch).eq('id', req.params.id).eq('owner_user_id', req.userId).select().single();
+  if (error) return fail(res, 400, error.message);
+  return ok(res, data);
+}));
+
+// GET /assessments?athlete_id= — Coach OS
+academyRouter.get('/assessments', requireAuth, h(async (req: AuthedRequest, res) => {
+  let q = svc().from('sports_assessments').select('*').order('date', { ascending: false }).limit(50);
+  const aid = (req.query?.athlete_id as string) || ''; if (aid) q = q.eq('athlete_id', aid);
+  const { data, error } = await q; if (error) return fail(res, 400, error.message);
+  return ok(res, { assessments: data ?? [] });
+}));
+
+// GET /training-plans?athlete_id= — Coach OS
+academyRouter.get('/training-plans', requireAuth, h(async (req: AuthedRequest, res) => {
+  let q = svc().from('sports_training_plans').select('*').order('created_at', { ascending: false }).limit(50);
+  const aid = (req.query?.athlete_id as string) || ''; if (aid) q = q.eq('athlete_id', aid);
+  const { data, error } = await q; if (error) return fail(res, 400, error.message);
+  return ok(res, { plans: data ?? [] });
+}));

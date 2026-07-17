@@ -11,6 +11,14 @@ const ENTITY_TYPES = ['athlete', 'academy', 'coach', 'league', 'scout'];
 
 export const verifyRouter = Router();
 
+// GET /verify/pending — the review queue (pending submissions)
+verifyRouter.get('/verify/pending', requireAuth, h(async (req: AuthedRequest, res) => {
+  const { data, error } = await svc()
+    .from('sports_verifications').select('*').eq('status', 'pending').order('ts', { ascending: false }).limit(50);
+  if (error) return fail(res, 400, error.message);
+  return ok(res, { pending: data ?? [] });
+}));
+
 // POST /verify/:entityType/:id — submit evidence (status: pending)
 verifyRouter.post('/verify/:entityType/:id', requireAuth, h(async (req: AuthedRequest, res) => {
   const { entityType, id } = req.params;

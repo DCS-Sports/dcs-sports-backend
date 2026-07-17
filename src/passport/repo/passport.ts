@@ -459,14 +459,17 @@ export async function getOrCreateMyPassport(userId: string, accessToken: string 
     return { athlete: a, created: true, onboarding_needed: true };
   }
   // RLS-scoped read: the user can always read their own row.
+  // Take the earliest row (limit 1) rather than .single()/.maybeSingle() so a user
+  // with duplicate athlete rows (from earlier get-or-create runs) still loads cleanly.
   const { data, error } = await reader(accessToken)
     .from('sports_athletes')
     .select('*')
     .eq('user_id', userId)
-    .maybeSingle();
+    .order('created_at', { ascending: true })
+    .limit(1);
   if (error) throw error;
-  if (data) {
-    const a = data as Athlete;
+  if (data && data.length) {
+    const a = data[0] as Athlete;
     return { athlete: a, created: false, onboarding_needed: needsOnboarding(a) };
   }
   const created = await createAthlete({ user_id: userId, sport: 'cricket', visibility: 'private' }, emailFromJwt(accessToken));
@@ -485,6 +488,7 @@ export interface OnboardingInput {
   dob?: string | null;
 }
 export async function completeOnboarding(athleteId: string, input: OnboardingInput): Promise<Athlete | null> {
+  const i = input as any;
   return updateAthlete(athleteId, {
     role: input.role ?? null,
     sport: input.sport ?? 'cricket',
@@ -493,7 +497,10 @@ export async function completeOnboarding(athleteId: string, input: OnboardingInp
     state: input.state ?? null,
     district: input.district ?? null,
     dob: input.dob ?? null,
-  });
+    country: i.country ?? null,
+    level: i.level ?? null,
+    club_name: i.club_name ?? null,
+  } as any);
 }
 
 /* ---- v2.0: video highlights · aiScout drill · recruiting profile ---- */

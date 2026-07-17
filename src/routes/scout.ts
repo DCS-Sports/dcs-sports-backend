@@ -56,11 +56,22 @@ scoutRouter.post('/trials', requireAuth, h(async (req: AuthedRequest, res) => {
   if (!name || !sport) return fail(res, 400, 'name and sport required');
   const { data, error } = await svc()
     .from('sports_trials')
-    .insert({ name, host_user_id, sport, level, venue, scheduled_at, visibility: visibility ?? 'discoverable' })
+    // host defaults to the authenticated user
+    .insert({ name, host_user_id: host_user_id ?? req.userId, sport, level, venue, scheduled_at, visibility: visibility ?? 'discoverable' })
     .select()
     .single();
   if (error) return fail(res, 400, `${error.message} (needs migration 004 if table missing)`);
   return ok(res, data);
+}));
+
+// GET /trials — list open/discoverable trials
+scoutRouter.get('/trials', requireAuth, h(async (req: AuthedRequest, res) => {
+  let q = svc().from('sports_trials').select('*').order('created_at', { ascending: false });
+  const sport = (req.query?.sport as string) || '';
+  if (sport) q = q.eq('sport', sport);
+  const { data, error } = await q;
+  if (error) return fail(res, 400, error.message);
+  return ok(res, { trials: data ?? [] });
 }));
 
 scoutRouter.post('/trials/:id/register', requireAuth, h(async (req: AuthedRequest, res) => {

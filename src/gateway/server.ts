@@ -16,6 +16,9 @@ import { identityRouter } from '../routes/identity';
 import { athleteRouter } from '../routes/athletes';
 import { academyRouter } from '../routes/academy';
 import { leagueRouter } from '../routes/league';
+import { matchDbRouter } from '../routes/match_db';
+import { intelRouter } from '../routes/intel';
+import { leadsRouter } from '../routes/leads';
 import { verifyRouter } from '../routes/verify';
 import { scoutRouter } from '../routes/scout';
 import { visionRouter } from '../routes/vision';
@@ -239,6 +242,9 @@ export function createApp() {
   app.use(athleteRouter);
   app.use(academyRouter);
   app.use(leagueRouter);
+  app.use(matchDbRouter); // DB-backed create-match / teams / scorecard / center / commentary — MUST precede CW12 in-memory
+  app.use(intelRouter); // CW4/5/6: match twin · tactical copilot · calibration · evidence passport
+  app.use(leadsRouter); // PUBLIC marketing leads + funnel events
   app.use(verifyRouter);
   app.use(scoutRouter);
   app.use(visionRouter);

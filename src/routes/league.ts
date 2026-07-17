@@ -15,7 +15,8 @@ leagueRouter.post('/leagues', requireAuth, h(async (req: AuthedRequest, res) => 
   const { name, organizer_user_id, format, level, season } = req.body ?? {};
   const { data, error } = await svc()
     .from('sports_leagues')
-    .insert({ name, organizer_user_id, format, level, season })
+    // organizer defaults to the authenticated user (requireAuth sets req.userId)
+    .insert({ name, organizer_user_id: organizer_user_id ?? req.userId, format, level, season })
     .select()
     .single();
   if (error) return fail(res, 400, error.message);
